@@ -42,32 +42,47 @@ class SmartAIAssistant:
                 "Content-Type": "application/json"
             }
 
-            data = {
-                "model": "llama-3.1-sonar-large-128k-online",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": query
+            # CORRECT Perplexity Models - try these in order
+            models_to_try = [
+                "sonar-reasoning",  # Latest reasoning model
+                "sonar",  # General model
+                "llama-3.1-8b-instant",  # Fast model
+                "llama-3.1-70b-instant",  # Powerful model
+            ]
+
+            for model in models_to_try:
+                try:
+                    data = {
+                        "model": model,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": query
+                            }
+                        ],
+                        "max_tokens": 1000,
+                        "temperature": 0.2
                     }
-                ],
-                "max_tokens": 1000,
-                "temperature": 0.2
-            }
 
-            with st.spinner(f'🔍 Searching with Perplexity AI...'):
-                response = requests.post(
-                    "https://api.perplexity.ai/chat/completions",
-                    headers=headers,
-                    json=data,
-                    timeout=30
-                )
+                    with st.spinner(f'🔍 Searching with {model}...'):
+                        response = requests.post(
+                            "https://api.perplexity.ai/chat/completions",
+                            headers=headers,
+                            json=data,
+                            timeout=30
+                        )
 
-                if response.status_code == 200:
-                    result = response.json()
-                    answer = result["choices"][0]["message"]["content"]
-                    return f"**🤖 Perplexity AI**: {answer}"
-                else:
-                    return f"❌ Search error (Status {response.status_code}): {response.text}"
+                        if response.status_code == 200:
+                            result = response.json()
+                            answer = result["choices"][0]["message"]["content"]
+                            return f"**🤖 Perplexity AI ({model})**: {answer}"
+                        elif response.status_code == 400 and "invalid_model" in response.text:
+                            continue  # Try next model if this one is invalid
+
+                except Exception as e:
+                    continue  # Try next model
+
+            return "❌ All Perplexity models failed. Please check available models."
 
         except Exception as e:
             return f"❌ Search error: {str(e)}"
@@ -169,6 +184,22 @@ def extract_name(user_input):
 def main():
     # Initialize AI assistant with Perplexity Pro
     ai = SmartAIAssistant(PERPLEXITY_API_KEY)
+
+    # Debug info
+    st.sidebar.write("🔍 Debug Info:")
+    try:
+        # Test database connection
+        test_history = ai.db.get_conversation_history("test", 1) if ai.db else []
+        st.sidebar.write(f"Database: {'✅ Connected' if ai.db else '❌ Failed'}")
+
+        # Test Perplexity connection
+        if PERPLEXITY_API_KEY:
+            st.sidebar.write("✅ Perplexity API key found")
+        else:
+            st.sidebar.write("❌ Perplexity API key missing")
+
+    except Exception as e:
+        st.sidebar.write(f"❌ Debug error: {e}")
 
     # Custom CSS
     st.markdown("""
