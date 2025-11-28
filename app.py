@@ -22,7 +22,6 @@ except:
     st.error("❌ Perplexity API key not found in secrets!")
     PERPLEXITY_API_KEY = None
 
-
 class SmartAIAssistant:
     def __init__(self, perplexity_api_key):
         self.perplexity_api_key = perplexity_api_key
@@ -30,40 +29,40 @@ class SmartAIAssistant:
             self.db = MySQLDatabase()
         except:
             self.db = None
-
+    
     def search_with_perplexity(self, query):
         """Get real-time information using Perplexity Pro"""
         if not self.perplexity_api_key:
             return "❌ Perplexity API key not configured. Please check secrets."
-
+        
         try:
             headers = {
                 "Authorization": f"Bearer {self.perplexity_api_key}",
                 "Content-Type": "application/json"
             }
-
+            
             # CORRECT Perplexity Models - try these in order
             models_to_try = [
-                "sonar-reasoning",  # Latest reasoning model
-                "sonar",  # General model
-                "llama-3.1-8b-instant",  # Fast model
-                "llama-3.1-70b-instant",  # Powerful model
+                "sonar-reasoning",           # Latest reasoning model
+                "sonar",                     # General model
+                "llama-3.1-8b-instant",     # Fast model
+                "llama-3.1-70b-instant",    # Powerful model
             ]
-
+            
             for model in models_to_try:
                 try:
                     data = {
                         "model": model,
                         "messages": [
                             {
-                                "role": "user",
+                                "role": "user", 
                                 "content": query
                             }
                         ],
                         "max_tokens": 1000,
                         "temperature": 0.2
                     }
-
+                    
                     with st.spinner(f'🔍 Searching with {model}...'):
                         response = requests.post(
                             "https://api.perplexity.ai/chat/completions",
@@ -71,35 +70,35 @@ class SmartAIAssistant:
                             json=data,
                             timeout=30
                         )
-
+                        
                         if response.status_code == 200:
                             result = response.json()
                             answer = result["choices"][0]["message"]["content"]
                             return f"**🤖 Perplexity AI ({model})**: {answer}"
                         elif response.status_code == 400 and "invalid_model" in response.text:
                             continue  # Try next model if this one is invalid
-
+                        
                 except Exception as e:
                     continue  # Try next model
-
+            
             return "❌ All Perplexity models failed. Please check available models."
-
+            
         except Exception as e:
             return f"❌ Search error: {str(e)}"
-
+    
     def chat_with_ai(self, message, user_name=None):
         """AI responses for conversations"""
         message_lower = message.lower()
-
+        
         responses = {
             'hi': f"Hello{' ' + user_name if user_name else ''}! 👋 I'm your AI assistant powered by Perplexity Pro! Ask me anything!",
             'hello': f"Hello{' ' + user_name if user_name else ''}! 👋 How can I help you today?",
             'hey': f"Hey{' ' + user_name if user_name else ''}! 🎉 Ready to answer your questions with Perplexity Pro!",
             'how are you': "I'm doing great! Powered by Perplexity Pro and MySQL database! 😄",
-
+            
             'thank you': "You're welcome! 😊 Happy to help!",
             'thanks': "You're welcome! 😊 Let me know if you need anything else!",
-
+            
             'what can you do': """
 🤖 **I can help you with**:
 - Answer questions with Perplexity Pro's real-time search
@@ -110,20 +109,20 @@ class SmartAIAssistant:
 
 Just ask me anything! 🚀
             """,
-
+            
             'who are you': "I'm your AI assistant powered by Perplexity Pro and MySQL database! I remember all our conversations!",
         }
-
+        
         for key, response in responses.items():
             if key in message_lower:
                 return response
-
+        
         return f"🤖 I'd be happy to help! Ask me anything and I'll search for current information using Perplexity Pro!"
-
+    
     def smart_response(self, user_input, user_name=None):
         """SMART response that searches for questions and saves to database"""
         user_input_lower = user_input.lower().strip()
-
+        
         # List of question starters that should ALWAYS trigger search
         question_starters = [
             'who is', 'what is', 'where is', 'when is', 'why is', 'how to',
@@ -131,7 +130,7 @@ Just ask me anything! 🚀
             'who was', 'what was', 'where was', 'when was', 'why was', 'how was',
             'define', 'explain', 'tell me about', 'search for', 'find'
         ]
-
+        
         # Specific people/topics that should trigger search
         search_topics = [
             'elon musk', 'bill gates', 'albert einstein', 'steve jobs',
@@ -139,33 +138,37 @@ Just ask me anything! 🚀
             'current', 'latest', 'news', 'today', 'weather', 'price of',
             'python', 'javascript', 'programming', 'coding', 'research'
         ]
-
+        
         # Check if it starts with a question word
         starts_with_question = any(user_input_lower.startswith(prefix) for prefix in question_starters)
-
+        
         # Check if it contains searchable topics
         contains_topic = any(topic in user_input_lower for topic in search_topics)
-
+        
         # Check if it's a clear question
-        is_question = ('?' in user_input_lower) or any(
-            word in user_input_lower for word in ['who', 'what', 'where', 'when', 'why', 'how'])
-
+        is_question = ('?' in user_input_lower) or any(word in user_input_lower for word in ['who', 'what', 'where', 'when', 'why', 'how'])
+        
         # DECISION: When to search vs when to chat
         if starts_with_question or contains_topic or is_question:
             bot_response = self.search_with_perplexity(user_input)
         else:
             bot_response = self.chat_with_ai(user_input, user_name)
-
-        # ✅ SAVE TO DATABASE
-        if user_name and self.db:
-            save_success = self.db.save_conversation(user_input, bot_response, user_name)
-            if save_success:
-                st.sidebar.success("💾 Conversation saved to database!")
+        
+        # ✅ IMPROVED DATABASE SAVING
+        if user_name:
+            if self.db and self.db.connection:
+                try:
+                    save_success = self.db.save_conversation(user_input, bot_response, user_name)
+                    if save_success:
+                        st.sidebar.success("💾 Conversation saved!")
+                    else:
+                        st.sidebar.error("❌ Failed to save!")
+                except Exception as e:
+                    st.sidebar.error(f"❌ Save error: {e}")
             else:
-                st.sidebar.error("❌ Failed to save to database!")
-
+                st.sidebar.warning("⚠️ Database not available")
+        
         return bot_response
-
 
 def extract_name(user_input):
     """Extract name from user input"""
@@ -173,34 +176,47 @@ def extract_name(user_input):
         r'my name is (\w+)', r'i am (\w+)', r'call me (\w+)', r"i'm (\w+)",
         r"name's (\w+)", r"this is (\w+)", r"you can call me (\w+)"
     ]
-
+    
     for pattern in patterns:
         match = re.search(pattern, user_input.lower())
         if match:
             return match.group(1).title()
     return None
 
-
 def main():
     # Initialize AI assistant with Perplexity Pro
     ai = SmartAIAssistant(PERPLEXITY_API_KEY)
-
-    # Debug info
-    st.sidebar.write("🔍 Debug Info:")
+    
+    # STEP 1: Enhanced Debug Info
+    st.sidebar.markdown("### 🔍 Debug Info")
     try:
-        # Test database connection
-        test_history = ai.db.get_conversation_history("test", 1) if ai.db else []
-        st.sidebar.write(f"Database: {'✅ Connected' if ai.db else '❌ Failed'}")
-
-        # Test Perplexity connection
-        if PERPLEXITY_API_KEY:
-            st.sidebar.write("✅ Perplexity API key found")
+        if ai.db and ai.db.connection:
+            st.sidebar.success("✅ Database: Connected")
+            # Test if we can save and retrieve
+            test_save = ai.db.save_conversation("test", "test response", "debug_user")
+            st.sidebar.write(f"💾 Save test: {'✅ Success' if test_save else '❌ Failed'}")
+            
+            # Check if tables exist
+            ai.db.cursor.execute("SHOW TABLES LIKE 'conversations'")
+            tables = ai.db.cursor.fetchall()
+            st.sidebar.write(f"📊 Tables: {'✅ Found' if tables else '❌ Missing'}")
+            
+            # Force create tables if missing
+            if not tables:
+                st.sidebar.warning("🔄 Creating tables...")
+                ai.db._create_tables()
         else:
-            st.sidebar.write("❌ Perplexity API key missing")
-
+            st.sidebar.error("❌ Database: Not Connected")
+            
     except Exception as e:
-        st.sidebar.write(f"❌ Debug error: {e}")
-
+        st.sidebar.error(f"❌ Database error: {e}")
+    
+    # Test Perplexity connection
+    if PERPLEXITY_API_KEY:
+        st.sidebar.success("✅ Perplexity API: Connected")
+    else:
+        st.sidebar.error("❌ Perplexity API: Missing")
+    
     # Custom CSS
     st.markdown("""
     <style>
@@ -223,22 +239,21 @@ def main():
     }
     </style>
     """, unsafe_allow_html=True)
-
+    
     # Header
     st.title("🚀 Smart AI Assistant with Perplexity Pro")
     st.markdown("### Powered by Perplexity Pro + MySQL Database")
     st.markdown("---")
-
+    
     # Initialize session state
     if "messages" not in st.session_state:
         st.session_state.messages = [
-            {"role": "assistant",
-             "content": "Hello! 👋 I'm your **AI Assistant powered by Perplexity Pro**! I remember all our conversations! What's your name?"}
+            {"role": "assistant", "content": "Hello! 👋 I'm your **AI Assistant powered by Perplexity Pro**! I remember all our conversations! What's your name?"}
         ]
-
+    
     if "user_name" not in st.session_state:
         st.session_state.user_name = None
-
+    
     # Display chat
     chat_container = st.container()
     with chat_container:
@@ -253,11 +268,11 @@ def main():
                 elif st.session_state.user_name and "🤖" in content:
                     content += ' <span class="database-badge">💾 Saved</span>'
                 st.markdown(f'<div class="bot-message">{content}</div>', unsafe_allow_html=True)
-
+    
     # User info sidebar
     if st.session_state.user_name:
         st.sidebar.markdown(f"### 👋 Welcome, {st.session_state.user_name}!")
-
+        
         # Show conversation history from database
         if st.sidebar.button("📊 Show My History"):
             if ai.db:
@@ -272,7 +287,7 @@ def main():
                     st.sidebar.info("No conversation history yet!")
             else:
                 st.sidebar.error("Database not connected!")
-
+    
     # Chat input
     st.markdown("---")
     col1, col2 = st.columns([4, 1])
@@ -280,7 +295,7 @@ def main():
         user_input = st.text_input("Your message:", placeholder="Ask me anything...", key="user_input")
     with col2:
         send_button = st.button("Send 🚀")
-
+    
     # Quick question buttons
     st.markdown("### 💡 Try These Questions:")
     col1, col2, col3, col4 = st.columns(4)
@@ -296,22 +311,22 @@ def main():
     with col4:
         if st.button("My History"):
             user_input = "show my history"
-
+    
     # Handle input
     if send_button and user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
-
+        
         name = extract_name(user_input)
         if name and not st.session_state.user_name:
             st.session_state.user_name = name
             # Save user preference
             if ai.db:
                 ai.db.save_user_preference(name, "conversation_style", "friendly")
-
+        
         bot_response = ai.smart_response(user_input, st.session_state.user_name)
         st.session_state.messages.append({"role": "assistant", "content": bot_response})
         st.rerun()
-
+    
     # Sidebar with database info
     with st.sidebar:
         st.header("🚀 Powered By")
@@ -321,14 +336,14 @@ def main():
         - Academic research
         - Citation support
         - Latest information
-
+        
         **💾 MySQL Database**:
         - Save all conversations
         - User preferences  
         - Chat history
         - Analytics data
         """)
-
+        
         # Database analytics
         if ai.db:
             analytics = ai.db.get_analytics()
@@ -338,17 +353,16 @@ def main():
                 st.metric("Total Chats", analytics.get('total_conversations', 0))
                 st.metric("Unique Users", analytics.get('unique_users', 0))
                 st.metric("Today's Chats", analytics.get('today_conversations', 0))
-
+        
         st.markdown("---")
         st.markdown(f"**Last update:** {datetime.now().strftime('%H:%M:%S')}")
-
+        
         if st.button("Clear Chat 🗑️"):
             st.session_state.messages = [
                 {"role": "assistant", "content": "Chat cleared! What's your name?"}
             ]
             st.session_state.user_name = None
             st.rerun()
-
 
 if __name__ == "__main__":
     main()
